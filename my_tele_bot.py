@@ -25,8 +25,8 @@ class MyTeleBot(object):
             "Canada": "ca",
         }
         self.topics = ["Business", "Entertainment",
-                  "Health", "Science", "Sports",
-                  "Technology"]  # topics to choose from
+                       "Health", "Science", "Sports",
+                       "Technology"]  # topics to choose from
 
         self.countries = ["Russia", "United States", "France", "United Kingdom", "Germany", "Canada"]
 
@@ -90,7 +90,6 @@ class MyTeleBot(object):
                 self.bot.send_message(message.chat.id, no_topics_message,
                                       reply_markup=topics_markup)
 
-
         @self.bot.message_handler(commands=["info"])
         def info(message):
             name = self.get_me()
@@ -102,6 +101,7 @@ class MyTeleBot(object):
             select_time(message)
             country_name_selected(message)
             time_selected(message)
+            topic_selected(message)
 
         def country_name_selected(message):
             """
@@ -119,6 +119,24 @@ class MyTeleBot(object):
                 self.data_base_handler.add_country(telegram_id=telegram_id,
                                                    country_name=str(message.text),
                                                    current_time=current_time)
+
+        def topic_selected(message):
+            """
+            handler for topic selection
+            :param message:  message from the user
+            """
+            topic = str(message.text)
+            telegram_id = get_user_telegram_id(message)  # user telegram id
+            topic_selected_message = "Alright, " + topic + " is added to your topics"
+            topic_is_used_message = "You already have " + topic + " in your topics"
+            if topic in self.topics:
+                # makes a request to the database and returns the result:
+                res = self.data_base_handler.add_topic(telegram_id=telegram_id,
+                                                       topic=topic)
+                if res:
+                    self.bot.send_message(message.chat.id, topic_selected_message)
+                else:
+                    self.bot.send_message(message.chat.id, topic_is_used_message)
 
         def select_time(message):
             """
@@ -158,7 +176,6 @@ class MyTeleBot(object):
                                                 current_time=current_time)
                 time_selected_message = "OK, I will send you news at " + str(selected_time) + " every day)"
                 self.bot.send_message(message.chat.id, time_selected_message)
-
 
         def get_user_nickname(message):
             """
