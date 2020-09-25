@@ -127,6 +127,63 @@ class DataBaseHandler(object):
         print(res)
         return res != [(None,)]
 
+    def add_topic(self, **kwargs):
+        """
+        adds one topic to existed topics of the user
+        :param kwargs:
+            topic : str     name of the topic
+            telegram_id:    user's telegram id
+        :returns:
+            True if topic is added successfully
+            False if topic is already chosen
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        topic = kwargs.get("topic", None)
+        is_topic_used = self.check_if_topic_is_used(telegram_id=telegram_id,
+                                                    topic=topic)
+        if is_topic_used:
+            return False
+        else:
+            user_topics = self.get_user_topics(
+                telegram_id=telegram_id)
+            new_user_topics = user_topics + str(topic) + ";"
+            query = "UPDATE User SET Categories = \"" + str(new_user_topics) \
+                    + "\" WHERE Telegram_id = " + str(telegram_id)
+            print(query)
+            self.make_update_query(query=query)  # updates user's topics
+            return True
+
+    def get_user_topics(self, **kwargs):
+        """
+
+        :param kwargs:
+            telegram_id:    user's telegram id
+        :return: str    all user topics separated by ';'
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        query = "SELECT Categories FROM User WHERE Telegram_id = " + str(telegram_id)
+        res = self.make_select_query(query=query)
+        print("User topics: ", res)
+        if res == [(None,)]:  # no topics at all
+            return ""
+        else:
+            return res[0][0]
+
+    def check_if_topic_is_used(self, **kwargs):
+        """
+        checks if the user has already chosen the topic
+        :param kwargs:
+            telegram_id:    user's telegram id
+            topic: str      name of the topic
+        :returns:
+            True if topic is already added
+            False if topic is not used by the user
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        topic = kwargs.get("topic")
+        user_topics = self.get_user_topics(telegram_id=telegram_id)
+        return topic in user_topics
+
 
 
 
