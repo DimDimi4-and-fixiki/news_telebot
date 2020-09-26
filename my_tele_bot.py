@@ -6,6 +6,27 @@ from data_base_handler import data_base_handler
 from news_api_handler import NewsApiHandler
 
 
+"""
+TODO:
+create method something like
+
+Add dictionary to the separate file: 
+eng_to_rus = 
+    {
+        "Choose topic": "Выберите темы для новостей"
+        ...
+    }  # dict for translation with all the messages
+    
+def my_send_message(message, **kwargs):
+    language = kwargs.get("language", None)  # language of the message
+    message_to_send = kwargs.get("message_to_send", None)  # message to send: str
+    translated_message_to_send = message_to_send
+    if str(language) == "rus" and message_to_send in eng_to_rus.keys():
+        translated_message_to_send = eng_to_rus[message_to_send]
+    self.bot.send_message(message.chat.id, translated_message_to_send)
+        
+"""
+
 class MyTeleBot(object):
     """
     class of my custom tele-bot
@@ -14,6 +35,7 @@ class MyTeleBot(object):
 
     def __init__(self, **kwargs):
         self.token_path = kwargs.get("token_path", None)
+        self.MAX_NUM_OF_ARTICLES = 6  # maximum number of articles on each topic
         self.bot = TeleBot(token=self.get_token())  # parent class init
         self.started = False  # True if bot is started
         self.data_base_handler = data_base_handler  # creating database handler
@@ -64,14 +86,15 @@ class MyTeleBot(object):
             self.bot.send_message(message.chat.id, choose_country_message,
                                   reply_markup=markup)  # choose country text
 
-        @self.bot.message_handler(commands=["select_num_of_news"])
-        def select_num_of_news(message):
-            select_num_of_news_message = "Select number of news you want to get on each topic"
-            numbers_of_news = [i for i in range(5)]
-            markup = get_custom_keyboard(items=numbers_of_news,
+        @self.bot.message_handler(commands=["select_num_of_articles"])
+        def select_num_of_articles(message):
+            select_num_of_articles_message = "Select number of news you want to get on each topic\n" \
+                                         "Now you receive 3 articles on each topic every day"
+            number_of_articles = [str(i) for i in range(1, self.MAX_NUM_OF_ARTICLES)]
+            markup = get_custom_keyboard(items=number_of_articles,
                                          one_time_keyboard=True)
             self.bot.send_message(message.chat.id,
-                                  select_num_of_news_message,
+                                  select_num_of_articles_message,
                                   reply_markup=markup)
 
         @self.bot.message_handler(commands=["select_time"])
@@ -128,6 +151,7 @@ class MyTeleBot(object):
             country_name_selected(message)
             time_selected(message)
             topic_selected(message)
+            num_of_articles_selected(message)
 
         def country_name_selected(message):
             """
@@ -163,6 +187,16 @@ class MyTeleBot(object):
                     self.bot.send_message(message.chat.id, topic_selected_message)
                 else:
                     self.bot.send_message(message.chat.id, topic_is_used_message)
+
+        def num_of_articles_selected(message):
+            max_num_of_articles = self.MAX_NUM_OF_ARTICLES
+            num_of_articles = str(message.text)
+            num_of_articles_selected_message = "OK. I will send you " + str(num_of_articles) + " articles on each topic"
+            error_message = "Please, enter a number from 1 to " + str(max_num_of_articles)
+            if num_of_articles.isdigit() and 0 < int(num_of_articles) <= max_num_of_articles:
+                self.bot.send_message(message.chat.id, num_of_articles_selected_message)
+            else:
+                self.bot.send_message(message.chat.id, error_message)
 
         def delete_topic_selected(message):
             telegram_id = get_user_telegram_id(message)
@@ -240,7 +274,7 @@ class MyTeleBot(object):
             """
             markup = types.ReplyKeyboardMarkup(**k)
             for item in items:
-                markup.add(item)
+                markup.add(str(item))
             return markup
 
         def check_user_registration(telegram_id):
