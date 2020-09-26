@@ -64,6 +64,16 @@ class MyTeleBot(object):
             self.bot.send_message(message.chat.id, choose_country_message,
                                   reply_markup=markup)  # choose country text
 
+        @self.bot.message_handler(commands=["select_num_of_news"])
+        def select_num_of_news(message):
+            select_num_of_news_message = "Select number of news you want to get on each topic"
+            numbers_of_news = [i for i in range(5)]
+            markup = get_custom_keyboard(items=numbers_of_news,
+                                         one_time_keyboard=True)
+            self.bot.send_message(message.chat.id,
+                                  select_num_of_news_message,
+                                  reply_markup=markup)
+
         @self.bot.message_handler(commands=["select_time"])
         def select_part_of_day(message):
             """
