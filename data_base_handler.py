@@ -213,6 +213,29 @@ class DataBaseHandler(object):
             self.make_update_query(query=query)  # updates user's topics
             return True
 
+    def get_user_first_time_enter(self, **kwargs):
+        """
+        gets user First_time_register value
+            'True' if it is first time user enters a bot
+            'False' if user entered a bot before
+        :param kwargs:
+        :return: str    user's First_time_register value
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        query = "SELECT First_time_enter FROM User WHERE Telegram_id = " \
+                + str(telegram_id)
+        res = self.make_select_query(query=query)
+        return res[0][0]
+
+    def update_user_first_time_enter(self, **kwargs):
+        """
+        Sets user's First_time enter to 'False'
+        :param kwargs:
+        :return:
+        """
+        telegram_id = kwargs.get("telegram_id")
+
+
     def get_user_topics(self, **kwargs):
         """
 

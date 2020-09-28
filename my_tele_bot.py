@@ -230,7 +230,6 @@ class MyTeleBot(object):
             num_of_articles_selected_message = "OK. I will send you " + str(num_of_articles) + " articles on each topic"
             error_message = "Please, enter a number from 1 to " + str(max_num_of_articles)
             if num_of_articles.isdigit() and 0 < int(num_of_articles) <= max_num_of_articles:
-                #self.bot.send_message(message.chat.id, num_of_articles_selected_message)
                 self.data_base_handler.add_num_of_articles(telegram_id=telegram_id,
                                                            current_time=current_time,
                                                            num_of_articles=num_of_articles)
