@@ -3,6 +3,30 @@ from telebot import types
 from data_base_handler import DataBaseHandler
 from datetime import date
 from data_base_handler import data_base_handler
+from news_api_handler import NewsApiHandler
+from languages import LanguageHandler
+
+
+"""
+TODO:
+create method something like
+
+Add dictionary to the separate file: 
+eng_to_rus = 
+    {
+        "Choose topic": "Выберите темы для новостей"
+        ...
+    }  # dict for translation with all the messages
+    
+def my_send_message(message, **kwargs):
+    language = kwargs.get("language", None)  # language of the message
+    message_to_send = kwargs.get("message_to_send", None)  # message to send: str
+    translated_message_to_send = message_to_send
+    if str(language) == "rus" and message_to_send in eng_to_rus.keys():
+        translated_message_to_send = eng_to_rus[message_to_send]
+    self.bot.send_message(message.chat.id, translated_message_to_send)
+        
+"""
 
 
 class MyTeleBot(object):
@@ -13,9 +37,13 @@ class MyTeleBot(object):
 
     def __init__(self, **kwargs):
         self.token_path = kwargs.get("token_path", None)
+        self.MAX_NUM_OF_ARTICLES = 6  # maximum number of articles on each topic
         self.bot = TeleBot(token=self.get_token())  # parent class init
         self.started = False  # True if bot is started
-        self.data_base_handler = data_base_handler  # creating database handler
+        self.data_base_handler = DataBaseHandler(path="news_bot_db")  # creating database handler
+        self.news_api_handler = NewsApiHandler(path="secure_codes/newsapi.txt")
+        self.language_handler = LanguageHandler()
+        self.markup_hider = types.ReplyKeyboardRemove()
         self.country_name_to_short_name = {  # dictionary with countries short names
             "Russia": "ru",
             "United States": "us",
@@ -24,14 +52,28 @@ class MyTeleBot(object):
             "Germany": "gr",
             "Canada": "ca",
         }
+        self.basic_markup_buttons = ["Add topics", "Change news time",
+                                     "Select country", "Delete topics",
+                                     "Change number of articles", "Change language"
+                                     ]  # buttons on a basic keyboard
+        self.russian_basic_markup_buttons = ["Добавить темы", "Поменять время отправки новостей",
+                                             "Выбрать страну", "Удалить темы", "Изменить число статей",
+                                             "Поменять язык", ]
+        self.basic_markup = None
         self.topics = ["Business", "Entertainment",
-                  "Health", "Science", "Sports",
-                  "Technology"]  # topics to choose from
+                       "Health", "Science", "Sports",
+                       "Technology"]  # topics to choose from
+        self.topics_rus = ["Бизнес", "Развлечения",
+                           "Здоровье", "Наука",
+                           "Спорт", "Технологии"]
+
+        self.languages = ["English", "Russian"]  # list of languages of the bot
 
         self.countries = ["Russia", "United States", "France", "United Kingdom", "Germany", "Canada"]
 
         @self.bot.message_handler(commands=["start"])  # start command handler
         def start(message):
+            self.basic_markup = get_custom_keyboard(items=self.basic_markup_buttons)
             start_message_text = """Hello, I'm a news bot.\nYou can get news on different topics every day)"""
             nickname = get_user_nickname(message)  # gets user's nickname
             telegram_id = get_user_telegram_id(message)  # gets user's telegram id
@@ -41,11 +83,28 @@ class MyTeleBot(object):
             choose_topics_text = "Choose topics you want to get news on:"
             welcome_back_message = "Welcome back! What do you want to do?"
             if is_registered:
-                self.bot.send_message(message.chat.id, welcome_back_message)
+                language = self.data_base_handler.get_user_language(telegram_id=telegram_id)
+                show_basic_keyboard(message, welcome_back_message, language=language)
             else:
                 add_user_to_database(message)
                 self.bot.send_message(message.chat.id, start_message_text)  # hello message
-                select_country(message)
+                select_language(message)
+                #select_topics(message)
+                #select_num_of_articles(message)
+                #select_country(message)
+
+        @self.bot.message_handler(commands=["select_language"])
+        def select_language(message):
+            markup = get_custom_keyboard(items=self.languages)
+            select_language_message = "Please, select language of the bot:"
+            self.bot.send_message(message.chat.id, select_language_message,
+                                  reply_markup=markup)
+
+
+        @self.bot.message_handler(commands=["get_news"])
+        def get_news(message):
+            self.news_api_handler.get_news(country="ru",
+                                           topic="business")
 
         @self.bot.message_handler(commands=["select_country"])
         def select_country(message):
@@ -56,6 +115,16 @@ class MyTeleBot(object):
                                          )  # markup for reply
             self.bot.send_message(message.chat.id, choose_country_message,
                                   reply_markup=markup)  # choose country text
+
+        @self.bot.message_handler(commands=["select_num_of_articles"])
+        def select_num_of_articles(message):
+            select_num_of_articles_message = "Select number of news you want to get on each topic\nNow you receive 3 articles on each topic every day"
+            number_of_articles = [str(i) for i in range(1, self.MAX_NUM_OF_ARTICLES)]
+            markup = get_custom_keyboard(items=number_of_articles,
+                                         one_time_keyboard=True)
+            self.bot.send_message(message.chat.id,
+                                  select_num_of_articles_message,
+                                  reply_markup=markup)
 
         @self.bot.message_handler(commands=["select_time"])
         def select_part_of_day(message):
@@ -73,11 +142,17 @@ class MyTeleBot(object):
 
         @self.bot.message_handler(commands=["select_topics"])
         def select_topics(message):
+            telegram_id = get_user_telegram_id(message)
+            language = self.data_base_handler.get_user_language(telegram_id=telegram_id)
             select_topic_message = "Select topics you want to get news on:"
             topics_markup = get_custom_keyboard(items=self.topics,
                                                 one_time_keyboard=True)  # topics markup
-            self.bot.send_message(message.chat.id, select_topic_message,
-                                  reply_markup=topics_markup)
+            if language == "Russian":
+                send_translated_message(select_topic_message, telegram_id=telegram_id,
+                                        chat_id=message.chat.id, markup_items=self.topics_rus)
+            if language == "English":
+                self.bot.send_message(message.chat.id, select_topic_message,
+                                      reply_markup=topics_markup)
 
         @self.bot.message_handler(commands=["delete_topics"])
         def delete_topics(message):
@@ -90,6 +165,14 @@ class MyTeleBot(object):
                 self.bot.send_message(message.chat.id, no_topics_message,
                                       reply_markup=topics_markup)
 
+            else:
+                data_base_handler.delete_topic(telegram_id=telegram_id,
+                                               topic="Entertainment")
+                """
+                TO DO:
+                add markup keyboard with user topics
+                add method for handling button press
+                """
 
         @self.bot.message_handler(commands=["info"])
         def info(message):
@@ -102,6 +185,9 @@ class MyTeleBot(object):
             select_time(message)
             country_name_selected(message)
             time_selected(message)
+            topic_selected(message)
+            num_of_articles_selected(message)
+            language_selected(message)
 
         def country_name_selected(message):
             """
@@ -120,6 +206,89 @@ class MyTeleBot(object):
                                                    country_name=str(message.text),
                                                    current_time=current_time)
 
+        def topic_selected(message):
+            """
+            handler for topic selection
+            :param message:  message from the user
+            """
+            topic = str(message.text)
+            telegram_id = get_user_telegram_id(message)  # user telegram id
+            language = data_base_handler.get_user_language(telegram_id=telegram_id)
+
+            if topic in self.topics or topic in self.topics_rus:
+                topic_selected_message = "Alright, " + topic + " is added to your topics"
+                topic_is_used_message = "You already have " + topic + " in your topics"
+                topic_selected_message_rus = "Хорошо, тема \'" + \
+                    self.language_handler.translate(topic, first_language="English",
+                                                    second_language="Russian") + \
+                                                    "\" добавлена в ваши темы"
+                # makes a request to the database and returns the result:
+                if topic in self.topics_rus:
+                    topic_eng = self.language_handler.translate(topic,
+                                                                first_language="rus",
+                                                                second_language="eng")
+                else:
+                    topic_eng = topic
+
+                res = self.data_base_handler.add_topic(telegram_id=telegram_id,
+                                                       topic=topic_eng)
+                if res:  # topic could be added
+
+                    if language == "Russian":
+                        self.bot.send_message(message.chat.id, topic_selected_message_rus)
+                    else:
+                        self.bot.send_message(message.chat.id, topic_selected_message)
+                else:  # topic was added before
+                    self.bot.send_message(message.chat.id, topic_is_used_message)
+
+        def language_selected(message):
+            language = str(message.text)
+            if language in self.languages:
+                telegram_id = get_user_telegram_id(message)  # user telegram id
+                language_selected_message = "OK now I will send you messages in " + str(language)
+                current_time = date.today()  # current date
+                self.data_base_handler.add_language(telegram_id=telegram_id,
+                                                    language=language,
+                                                    current_time=current_time)
+                send_translated_message(language_selected_message,
+                                        telegram_id=telegram_id,
+                                        chat_id=message.chat.id)
+
+                is_registered = check_user_registration(telegram_id=telegram_id)
+                if not is_registered:  # user is not registered
+                    select_topics(message)
+                if is_registered:
+                    if language == "English":
+                        show_basic_keyboard(message, language_selected_message,
+                                            language=language)
+
+        def num_of_articles_selected(message):
+            max_num_of_articles = self.MAX_NUM_OF_ARTICLES
+            num_of_articles = str(message.text)
+            telegram_id = get_user_telegram_id(message)
+            current_time = date.today()
+            num_of_articles_selected_message = "OK. I will send you " + str(num_of_articles) + " articles on each topic"
+            error_message = "Please, enter a number from 1 to " + str(max_num_of_articles)
+            if num_of_articles.isdigit() and 0 < int(num_of_articles) <= max_num_of_articles:
+                self.data_base_handler.add_num_of_articles(telegram_id=telegram_id,
+                                                           current_time=current_time,
+                                                           num_of_articles=num_of_articles)
+                show_basic_keyboard(message, num_of_articles_selected_message)
+            else:
+                if num_of_articles.isdigit():
+                    self.bot.send_message(message.chat.id, error_message)
+
+        def delete_topic_selected(message):
+            telegram_id = get_user_telegram_id(message)
+            topic = str(message.text)
+            res = self.data_base_handler.delete_topic(telegram_id=telegram_id,
+                                                      topic=topic)
+            if not res:  # no topic in user's topics
+                error_message = "You don't have such a topic"
+                self.bot.send_message(message.chat.id, error_message)
+            else:  # topic is deleted
+                topic_is_deleted_message = topic + " was deleted from your topics"
+
         def select_time(message):
             """
             sends markup for time selection
@@ -128,7 +297,7 @@ class MyTeleBot(object):
             morning_time_options = ["5:00", "6:00", "7:00", "8:00", "9:00", "10:00", "11:00"]  # options for morning
             afternoon_time_options = ["12:00", "13:00", "14:00", "15:00", "16:00"]  # options for afternoon
             evening_time_options = ["17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00", "00:00"]  # options for evening
-            select_time_message = "Select time you want to get news on"
+            select_time_message = "Select time you want to get news at"
             morning_markup = get_custom_keyboard(items=morning_time_options,
                                                  one_time_keyboard=True)  # markup for morning options
             afternoon_markup = get_custom_keyboard(items=afternoon_time_options,
@@ -159,7 +328,6 @@ class MyTeleBot(object):
                 time_selected_message = "OK, I will send you news at " + str(selected_time) + " every day)"
                 self.bot.send_message(message.chat.id, time_selected_message)
 
-
         def get_user_nickname(message):
             """
             gets user's nickname in telegram
@@ -186,7 +354,7 @@ class MyTeleBot(object):
             """
             markup = types.ReplyKeyboardMarkup(**k)
             for item in items:
-                markup.add(item)
+                markup.add(str(item))
             return markup
 
         def check_user_registration(telegram_id):
@@ -215,6 +383,38 @@ class MyTeleBot(object):
                 print("Add user crash")
                 print(str(e))
 
+        def send_translated_message(text, **params):
+            telegram_id = params.get("telegram_id", None)  # user's telegram id
+            chat_id = params.get("chat_id", None)  # chat id to send message
+            markup_items = params.get("markup_items", None)
+            user_language = self.data_base_handler.get_user_language(telegram_id=telegram_id)
+
+            if user_language == "Russian":
+                #  translates message into russian:
+                translated_message = self.language_handler.translate(message=text,
+                                                                     first_language="English",
+                                                                     second_language="Russian")
+                # sends message with no markup
+                if not markup_items:
+                    self.bot.send_message(chat_id, translated_message)
+                else:
+                    markup = get_custom_keyboard(items=markup_items)
+                    self.bot.send_message(chat_id, translated_message,
+                                          reply_markup=markup)
+
+
+
+
+        def show_basic_keyboard(message, text, **k):
+            #self.bot.send_message(message.chat.id, "", reply_markup=self.markup_hider)
+            lang = k.get("language", "English")
+            self.basic_markup = get_custom_keyboard(items=self.basic_markup_buttons)
+            if lang == "Russian":
+                text = self.language_handler.translate(text,
+                                                       first_language="English",
+                                                       second_language="Russian")
+                self.basic_markup = get_custom_keyboard(items=self.russian_basic_markup_buttons)
+            self.bot.send_message(message.chat.id, str(text), reply_markup=self.basic_markup)
 
     def get_token(self):
         """
