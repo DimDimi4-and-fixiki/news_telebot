@@ -82,6 +82,7 @@ class DataBaseHandler(object):
         """
         query = "SELECT * FROM User WHERE Telegram_id = " + str(telegram_id)
         res = self.make_select_query(query=query)  # select all users with this Telegram_id
+        print("LUL", res)
         return res != []
 
     def add_country(self, **kwargs):
@@ -109,7 +110,46 @@ class DataBaseHandler(object):
         is_user_registered = self.check_user(telegram_id=telegram_id)
         if not is_user_registered:
             self.add_user(telegram_id=telegram_id, current_time=current_time)
-        query = "UPDATE User SET News_time = " + "\"" + str(news_time) + "\" WHERE Telegram_id = " + str(telegram_id)
+        query = "UPDATE User SET News_time = " + "\"" + str(news_time) + "\" WHERE Telegram_id = " +\
+                str(telegram_id)
+        self.make_update_query(query=query)
+
+    def add_language(self, **kwargs):
+        """
+        adds information about language of the bot in the database
+        :param kwargs:
+            telegram_id: str;   user's telegram id
+            language: str       language of the bot
+            current_time: str;  current time
+        :return:
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        language = kwargs.get("language", None)
+        current_time = kwargs.get("current_time", None)
+        is_user_registered = self.check_user(telegram_id=telegram_id)
+        if not is_user_registered:
+            self.add_user(telegram_id=telegram_id, current_time=current_time)
+        query = "UPDATE User SET Language = \"" + str(language) + "\" WHERE Telegram_id = " + \
+                str(telegram_id)
+        self.make_update_query(query=query)
+
+    def add_num_of_articles(self, **kwargs):
+        """
+        Adds information about the user's number of articles in the database
+        :param kwargs:
+            telegram_id: str;       user's telegram id
+            current_time: str;      current time
+            num_of_articles: int    number of articles
+        :return:
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        current_time = kwargs.get("current_time", None)
+        num_of_articles = kwargs.get("num_of_articles", None)
+        is_user_registered = self.check_user(telegram_id=telegram_id)
+        if not is_user_registered:
+            self.add_user(telegram_id=telegram_id, current_time=current_time)
+        query = "UPDATE User SET Num_of_articles = " + str(num_of_articles) + \
+                " WHERE Telegram_id = " + str(telegram_id)
         self.make_update_query(query=query)
 
     def check_topics(self, **kwargs):
@@ -126,6 +166,118 @@ class DataBaseHandler(object):
         res = self.make_select_query(query=query)  # makes SELECT query
         print(res)
         return res != [(None,)]
+
+    def delete_topic(self, **kwargs):
+        """
+        deletes topic from user topics
+        :param kwargs:
+            telegram_id:    user's telegram_id
+            topic: str      topic which should be deleted
+        :return:
+            False if topic is not in user's topics
+            True if topic is deleted successfully
+        """
+        telegram_id = kwargs.get("telegram_id")
+        topic = kwargs.get("topic")  # topic to delete
+        user_topics = self.get_user_topics(telegram_id=telegram_id)
+        if topic not in user_topics:
+            return False
+        new_user_topics = user_topics.replace(topic + ";", "")
+        query = "UPDATE User SET Categories = \"" + str(new_user_topics) + \
+                "\" WHERE Telegram_id = " + str(telegram_id)  # query to change topics
+        print("DELETE: ", query)
+        return True
+
+    def add_topic(self, **kwargs):
+        """
+        adds one topic to existed topics of the user
+        :param kwargs:
+            topic : str     name of the topic
+            telegram_id:    user's telegram id
+        :returns:
+            True if topic is added successfully
+            False if topic is already chosen
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        topic = kwargs.get("topic", None)
+        is_topic_used = self.check_if_topic_is_used(telegram_id=telegram_id,
+                                                    topic=topic)
+        if is_topic_used:
+            return False
+        else:
+            user_topics = self.get_user_topics(
+                telegram_id=telegram_id)
+            new_user_topics = user_topics + str(topic) + ";"
+            query = "UPDATE User SET Categories = \"" + str(new_user_topics) \
+                    + "\" WHERE Telegram_id = " + str(telegram_id)
+            print(query)
+            self.make_update_query(query=query)  # updates user's topics
+            return True
+
+    def get_user_first_time_enter(self, **kwargs):
+        """
+        gets user First_time_register value
+            'True' if it is first time user enters a bot
+            'False' if user entered a bot before
+        :param kwargs:
+        :return: str    user's First_time_register value
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        query = "SELECT First_time_enter FROM User WHERE Telegram_id = " \
+                + str(telegram_id)
+        res = self.make_select_query(query=query)
+        return res[0][0]
+
+    def update_user_first_time_enter(self, **kwargs):
+        """
+        Sets user's First_time enter to 'False'
+        :param kwargs:
+        :return:
+        """
+        telegram_id = kwargs.get("telegram_id")
+
+
+    def get_user_topics(self, **kwargs):
+        """
+
+        :param kwargs:
+            telegram_id:    user's telegram id
+        :return: str    all user topics separated by ';'
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        query = "SELECT Categories FROM User WHERE Telegram_id = " + str(telegram_id)
+        res = self.make_select_query(query=query)
+        print("User topics: ", res)
+        if res == [(None,)]:  # no topics at all
+            return ""
+        else:
+            return res[0][0]
+
+    def get_user_language(self, **kwargs):
+        """
+        gets language that user has chosen
+        :param kwargs:
+        :return: str    user's language
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        query = "SELECT Language FROM User WHERE Telegram_id = " + str(telegram_id)
+        res = self.make_select_query(query=query)
+        return str(res[0][0])
+
+    def check_if_topic_is_used(self, **kwargs):
+        """
+        checks if the user has already chosen the topic
+        :param kwargs:
+            telegram_id:    user's telegram id
+            topic: str      name of the topic
+        :returns:
+            True if topic is already added
+            False if topic is not used by the user
+        """
+        telegram_id = kwargs.get("telegram_id", None)
+        topic = kwargs.get("topic")
+        user_topics = self.get_user_topics(telegram_id=telegram_id)
+        return topic in user_topics
 
 
 
