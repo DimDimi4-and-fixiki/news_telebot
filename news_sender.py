@@ -6,6 +6,7 @@ from datetime import datetime
 class NewsSender(object):
     """
     class for sending news to the user on time
+    Sends articles to the users
     """
     def __init__(self, **kwargs):
         self.bot = kwargs.get("bot", None)
