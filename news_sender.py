@@ -58,10 +58,6 @@ class NewsSender(object):
             time.sleep(self.sleep_interval)
             print("T2", t2)
             return True
-        if abs(hours1 - hours2) <= 1 and minutes1 == 59 and seconds1 >= 60 - self.sleep_interval:
-            time.sleep(2)
-            print("T2", t2)
-            return True
         return False
 
     def send_news_by_time(self, **kwargs):
